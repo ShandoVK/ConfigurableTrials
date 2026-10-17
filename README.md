@@ -1,9 +1,8 @@
-# Configurable Trials
+ # Configurable Trials
 
-This repository contains a sample mod for Risk of Rain 2.
+A Risk of Rain 2 mod that allows you to be able to edit the time and which trials can appear for the N'kuhana Trials in Hallowed Concepts.
 
-You can clone this repository, open the visual studio solution file and compile it immediately.
-
-This repository is meant to represent best practices for starting a simple mod.
-
-Once your mod get compiled, you can utilize the Thunderstore folder for later uploading it to https://thunderstore.io/c/riskofrain2/
+## Known Issues
+- Additional umbras don't have their respective aura effects, I don't know how this is handled
+- Enemies with the additional umbras mode will very quickly delete you, I'm not sure how to balance this well enough so have fun ig
+- Probably something else since this is my first time making a mod for any game ever
