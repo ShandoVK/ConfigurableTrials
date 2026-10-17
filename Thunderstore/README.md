@@ -10,7 +10,7 @@ Trials normally have a strict 3min 30sec timer, now you're free to adjust to you
 #### Earnable time
 Time can now be earned by clearing stages or looping. Try [this mod](https://thunderstore.io/c/riskofrain2/p/Slendykray/RenewableTrial/) if you want Karma to increase time too.
 
-![This is an alt text.](/image/Markdown-mark.svg)
+![Extra time](https://raw.githubusercontent.com/ShandoVK/ConfigurableTrials/refs/heads/main/Images/TimeExtended.png)
 
 
 #### Repeatable Trials
@@ -24,7 +24,7 @@ You can now blacklist individual trials, no longer are you potentially forced to
 
 Also there's a feature to add more stuff to the one trial that has you fighting Umbras. Enable it if you want some true pain (supports modded survivors as well.)
 
-![This is an alt text.](/image/Markdown-mark.svg)
+![Good luck](https://raw.githubusercontent.com/ShandoVK/ConfigurableTrials/refs/heads/main/Images/MoreUmbra.png)
 
 
 #
