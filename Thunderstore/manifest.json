@@ -1,12 +1,10 @@
 ﻿{
-	"name": "MyFirstMod",
-	"version_number": "1.0.0",
-	"website_url": "",
-	"description": "My first Mod",
+	"name": "ConfigurableTrials",
+	"version_number": "0.5.0",
+	"website_url": "https://github.com/ShandoVK/ConfigurableTrials",
+	"description": "Allows users to modify Hallowed Concepts trials to be compatible with more kinds of runs. Trial filters included and supports Risk of Options.",
 	"dependencies": [
-		"bbepis-BepInExPack-5.4.2108",
-		"RiskofThunder-HookGenPatcher-1.2.3",
-		"RiskofThunder-R2API_Items-1.0.1",
-		"RiskofThunder-R2API_Language-1.0.0"
+		"bbepis-BepInExPack-5.4.2122",
+		"RiskofThunder-HookGenPatcher-1.2.9"
 	]
 }
