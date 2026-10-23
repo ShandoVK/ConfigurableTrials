@@ -28,6 +28,7 @@ namespace ConfigurableTrialPlugin
 
         private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static float bossRushLeftoverTime;
         private static readonly FieldInfo trialSelectionField = typeof(DLC4TrialSelector).GetField("_trialSelection", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo canAddTrialMethod = typeof(DLC4TrialSelector).GetMethod("CanAddTrial", BindingFlags.NonPublic | BindingFlags.Instance);
         private static DLC4TrialSelector activeTrialSelector;
@@ -94,7 +95,7 @@ namespace ConfigurableTrialPlugin
 
             timeAddedBossRush = Config.Bind(
                 "Timer",
-                "Time added for clearing the Soulbound Threshold stage",
+                "Time added for clearing boss rush",
                 false,
                 new ConfigDescription("Upon finishing Soulbound Threshold, leftover time from the boss rush portion is refunded to the timer."));
 
@@ -116,22 +117,24 @@ namespace ConfigurableTrialPlugin
                 RiskOfOptionsCompat.AddFloatField(startingTimer);
                 RiskOfOptionsCompat.AddFloatField(timeAddedStage);
                 RiskOfOptionsCompat.AddFloatField(timeAddedLoop);
+                RiskOfOptionsCompat.AddCheckbox(timeAddedBossRush, true);
 
                 foreach (var toggle in trialVariantToggle.Values)
-                    RiskOfOptionsCompat.AddCheckbox(toggle);
+                    RiskOfOptionsCompat.AddCheckbox(toggle, true);
             }
 
             On.RoR2.Run.AdvanceStage += Run_AdvanceStage;
             On.RoR2.TrialVariantEventRelay.IsAvailableServer += TrialVariantEventRelay_IsAvailableServer;
+
+            On.RoR2.DoomTimer.HideTimersServer += DoomTimer_HideTimersServer;
             On.RoR2.ChampRushMissionController.CompleteReaperFight += ChampRush_CompleteReaperFight;
 
             On.RoR2.DLC4TrialSelector.Awake += DLC4TrialSelector_Awake;
             On.RoR2.DLC4TrialSelector.CanAddTrial += DLC4TrialSelector_CanAddTrial;
-            On.RoR2.DLC4TrialSelector.RemoveTrialFromSelectionServer += DLC4TrialSelector_RemoveTrialFromSelectionServer;
             On.RoR2.DLC4TrialSelector.RemoveTrialSceneFromCollectionServer += DLC4TrialSelector_RemoveTrialSceneFromCollectionServer;
         }
 
-        // timer editor
+        // timer editors
         private void DLC4TrialSelector_Awake(On.RoR2.DLC4TrialSelector.orig_Awake orig, DLC4TrialSelector self)
         {
             orig.Invoke(self);
@@ -173,42 +176,46 @@ namespace ConfigurableTrialPlugin
             // Log.Info($"TIME EXTENDED +{bonus}s ({remaining} -> {remaining + bonus})");
         }
 
-        private static float GetBossRushTimer(DoomTimer doomTimer)
+        private void DoomTimer_HideTimersServer(On.RoR2.DoomTimer.orig_HideTimersServer orig, DoomTimer self)
         {
-            if (!doomTimer || timeTilDoomsday == null || timePause == null)
-                return 0f;
+            if (timeAddedBossRush.Value && NetworkServer.active)
+            {
+                var deadlineBoxed = timeTilDoomsday.GetValue(self);
+                if (deadlineBoxed != null)
+                {
+                    var deadline = (Run.FixedTimeStamp)deadlineBoxed;
+                    var timePaused = (Run.FixedTimeStamp)timePause.GetValue(self);
 
-            var deadlineBoxed = timeTilDoomsday.GetValue(doomTimer);
-            if (deadlineBoxed == null)
-                return 0f;
+                    float timeLeftover;
+                    if (timePaused.isNegativeInfinity)
+                        timeLeftover = deadline.timeUntilClamped;
+                    else
+                        timeLeftover = deadline.t - timePaused.t;
 
-            var deadline = (Run.FixedTimeStamp)deadlineBoxed;
-            var timePaused = (Run.FixedTimeStamp)timePause.GetValue(doomTimer);
+                    if (timeLeftover > 0f)
+                        bossRushLeftoverTime = timeLeftover;
+                }
+            }
 
-            float timeLeftover;
-            if (timePaused.isNegativeInfinity)
-                timeLeftover = deadline.timeUntilClamped;
-            else
-                timeLeftover = deadline.t - timePaused.t;
-
-            return Math.Max(timeLeftover, 0f);
+            orig(self);
         }
 
         private void ChampRush_CompleteReaperFight(On.RoR2.ChampRushMissionController.orig_CompleteReaperFight orig, ChampRushMissionController self)
         {
-            float timeLeftover = 0f;
-            if (timeAddedBossRush.Value)
-                timeLeftover = GetBossRushTimer(self.doomTimer);
-
             orig(self);
+
+            float timeLeftover = bossRushLeftoverTime;
+            bossRushLeftoverTime = 0f;
+
+            if (!timeAddedBossRush.Value || timeLeftover <= 0f || !NetworkServer.active || !activeTrialSelector)
+                return;
 
             float trialTimer = activeTrialSelector.GetRemainingTrialTimeServer();
             if (trialTimer > 0f)
                 activeTrialSelector.SetRemainingTrialTimeServer(trialTimer + timeLeftover);
-            Log.Info($"TIME EXTENDED +{timeLeftover}");
         }
 
-        // trial blacklist handlers
+        // trial blacklist
         private static bool IsVariantEnabled(string customName)
         {
             return !trialVariantToggle.TryGetValue(customName, out var entry) || entry.Value;
@@ -231,23 +238,7 @@ namespace ConfigurableTrialPlugin
         }
 
 
-        // stage refresh handlers
-        private void DLC4TrialSelector_RemoveTrialFromSelectionServer(On.RoR2.DLC4TrialSelector.orig_RemoveTrialFromSelectionServer orig, DLC4TrialSelector self, SceneDef trialScene)
-        {
-            orig.Invoke(self, trialScene);
-
-            if (!NetworkServer.active)
-                return;
-
-            if (self.IsAnyTrialAvailableServer())
-                return;
-
-            var selection = (WeightedSelection<SceneDef>)trialSelectionField.GetValue(self);
-            var filter = (Func<SceneDef, bool>)Delegate.CreateDelegate(typeof(Func<SceneDef, bool>), self, canAddTrialMethod);
-
-            self.trialsSceneCollection.AddToWeightedSelection(selection, filter);
-        }
-
+        // stage refresh
         private void DLC4TrialSelector_RemoveTrialSceneFromCollectionServer(On.RoR2.DLC4TrialSelector.orig_RemoveTrialSceneFromCollectionServer orig, DLC4TrialSelector self, TrialController trialController)
         {
             orig.Invoke(self, trialController);
@@ -261,6 +252,14 @@ namespace ConfigurableTrialPlugin
                 if (variant.exhaustOnSuccess)
                     Run.instance.ResetEventFlag($"{variant.customName}_Exhausted");
             }
+
+            if (self.IsAnyTrialAvailableServer())
+                return;
+
+            var selection = (WeightedSelection<SceneDef>)trialSelectionField.GetValue(self);
+            var filter = (Func<SceneDef, bool>)Delegate.CreateDelegate(typeof(Func<SceneDef, bool>), self, canAddTrialMethod);
+
+            self.trialsSceneCollection.AddToWeightedSelection(selection, filter);
             // Log.Info($"All trial objectives have been refreshed.");
         }
     }
@@ -271,7 +270,7 @@ namespace ConfigurableTrialPlugin
         public static bool Enabled => _enabled ??= Chainloader.PluginInfos.ContainsKey("com.rune580.riskofoptions");
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void AddCheckbox(ConfigEntry<bool> entry) => ModSettingsManager.AddOption(new CheckBoxOption(entry));
+        public static void AddCheckbox(ConfigEntry<bool> entry, bool restartRequired = false) => ModSettingsManager.AddOption(new CheckBoxOption(entry, restartRequired));
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void AddFloatField(ConfigEntry<float> entry) => ModSettingsManager.AddOption(new FloatFieldOption(entry));
