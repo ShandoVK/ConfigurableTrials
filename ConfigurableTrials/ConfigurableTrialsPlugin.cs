@@ -24,8 +24,10 @@ namespace ConfigurableTrialPlugin
         public const string PluginGUID = "ShandoIsSad.ConfigurableTrials";
         public const string PluginAuthor = "ShandoVK";
         public const string PluginName = "ConfigurableTrials";
-        public const string PluginVersion = "0.5.1";
+        public const string PluginVersion = "0.6.0";
 
+        private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo trialSelectionField = typeof(DLC4TrialSelector).GetField("_trialSelection", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo canAddTrialMethod = typeof(DLC4TrialSelector).GetMethod("CanAddTrial", BindingFlags.NonPublic | BindingFlags.Instance);
         private static DLC4TrialSelector activeTrialSelector;
@@ -33,6 +35,7 @@ namespace ConfigurableTrialPlugin
         public static ConfigEntry<float> startingTimer;
         public static ConfigEntry<float> timeAddedStage;
         public static ConfigEntry<float> timeAddedLoop;
+        public static ConfigEntry<bool> timeAddedBossRush;
 
         // dlc4 trial scenes and their variants (each scene has 3 variants), add to here if gearbox ever makes that claptrap trial or some other stupid thing
         private static readonly Dictionary<string, ConfigEntry<bool>> trialVariantToggle = new Dictionary<string, ConfigEntry<bool>>();
@@ -89,6 +92,12 @@ namespace ConfigurableTrialPlugin
                 new ConfigDescription("For each time you loop, the timer increases by this value. Set it to 0 to disable",
                 new AcceptableValueRange<float>(0f, 86400f)));
 
+            timeAddedBossRush = Config.Bind(
+                "Timer",
+                "Time added for clearing the Soulbound Threshold stage",
+                false,
+                new ConfigDescription("Upon finishing Soulbound Threshold, leftover time from the boss rush portion is refunded to the timer."));
+
             foreach (var scene in SceneVariants.Values)
             {
                 foreach (var (trialId, trialName) in scene.variants)
@@ -114,6 +123,7 @@ namespace ConfigurableTrialPlugin
 
             On.RoR2.Run.AdvanceStage += Run_AdvanceStage;
             On.RoR2.TrialVariantEventRelay.IsAvailableServer += TrialVariantEventRelay_IsAvailableServer;
+            On.RoR2.ChampRushMissionController.CompleteReaperFight += ChampRush_CompleteReaperFight;
 
             On.RoR2.DLC4TrialSelector.Awake += DLC4TrialSelector_Awake;
             On.RoR2.DLC4TrialSelector.CanAddTrial += DLC4TrialSelector_CanAddTrial;
@@ -161,6 +171,41 @@ namespace ConfigurableTrialPlugin
 
             activeTrialSelector.SetRemainingTrialTimeServer(remaining + bonus);
             // Log.Info($"TIME EXTENDED +{bonus}s ({remaining} -> {remaining + bonus})");
+        }
+
+        private static float GetBossRushTimer(DoomTimer doomTimer)
+        {
+            if (!doomTimer || timeTilDoomsday == null || timePause == null)
+                return 0f;
+
+            var deadlineBoxed = timeTilDoomsday.GetValue(doomTimer);
+            if (deadlineBoxed == null)
+                return 0f;
+
+            var deadline = (Run.FixedTimeStamp)deadlineBoxed;
+            var timePaused = (Run.FixedTimeStamp)timePause.GetValue(doomTimer);
+
+            float timeLeftover;
+            if (timePaused.isNegativeInfinity)
+                timeLeftover = deadline.timeUntilClamped;
+            else
+                timeLeftover = deadline.t - timePaused.t;
+
+            return Math.Max(timeLeftover, 0f);
+        }
+
+        private void ChampRush_CompleteReaperFight(On.RoR2.ChampRushMissionController.orig_CompleteReaperFight orig, ChampRushMissionController self)
+        {
+            float timeLeftover = 0f;
+            if (timeAddedBossRush.Value)
+                timeLeftover = GetBossRushTimer(self.doomTimer);
+
+            orig(self);
+
+            float trialTimer = activeTrialSelector.GetRemainingTrialTimeServer();
+            if (trialTimer > 0f)
+                activeTrialSelector.SetRemainingTrialTimeServer(trialTimer + timeLeftover);
+            Log.Info($"TIME EXTENDED +{timeLeftover}");
         }
 
         // trial blacklist handlers
