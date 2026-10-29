@@ -1,6 +1,6 @@
 ﻿{
 	"name": "ConfigurableTrials",
-	"version_number": "0.6.0",
+	"version_number": "0.7.0",
 	"website_url": "https://github.com/ShandoVK/ConfigurableTrials",
 	"description": "Allows users to modify Hallowed Concepts trials to be compatible with more kinds of runs. Trial filters included and supports Risk of Options.",
 	"dependencies": [
