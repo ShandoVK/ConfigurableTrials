@@ -24,7 +24,7 @@ namespace ConfigurableTrialPlugin
         public const string PluginGUID = "ShandoIsSad.ConfigurableTrials";
         public const string PluginAuthor = "ShandoVK";
         public const string PluginName = "ConfigurableTrials";
-        public const string PluginVersion = "0.7.0";
+        public const string PluginVersion = "0.7.1";
 
         private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -72,12 +72,13 @@ namespace ConfigurableTrialPlugin
 
         private static readonly HashSet<ItemTier> vanillaTiers = new HashSet<ItemTier>
         {
-            ItemTier.Tier1, ItemTier.Tier2, ItemTier.Tier3, ItemTier.Boss, ItemTier.Lunar, ItemTier.VoidTier1, ItemTier.VoidTier2, ItemTier.VoidTier3, ItemTier.VoidBoss, ItemTier.Cursed
+            ItemTier.Tier1, ItemTier.Tier2, ItemTier.Tier3, ItemTier.Boss, ItemTier.Lunar, ItemTier.VoidTier1, ItemTier.VoidTier2, ItemTier.VoidTier3, ItemTier.VoidBoss, ItemTier.Cursed, ItemTier.FoodTier
         };
 
         private static readonly HashSet<string> customTiers = new HashSet<string>
         {
-            "Core"
+            "Core",
+            "VoidLunar"
             //Sibylline & Highlander items don't actually store unlike other items, so they persist into trials. Not sure if this is intentional \(- n -)/
         };
 

@@ -2,7 +2,7 @@
 	"name": "ConfigurableTrials",
 	"version_number": "0.7.0",
 	"website_url": "https://github.com/ShandoVK/ConfigurableTrials",
-	"description": "Allows users to modify Hallowed Concepts trials to be compatible with more kinds of runs. Trial filters included and supports Risk of Options.",
+	"description": "Allows users to configure various aspects of N'kuhana's Trials. Supports Risk of Options",
 	"dependencies": [
 		"bbepis-BepInExPack-5.4.2122",
 		"RiskofThunder-HookGenPatcher-1.2.9"

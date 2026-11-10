@@ -1,3 +1,7 @@
+## 0.7.1
+- Added food tier and Void Lunar tier to the item selector (this tier is from [BubbetsItems](https://thunderstore.io/c/riskofrain2/p/Bubbet/BubbetsItems/))
+This is just a safeguard for any other mod that adds food-tier items that doesn't have the CanBeRental tag.
+
 ## 0.7.0
 - Added ability to edit the starting items given for trials<br>
 This feature also supports modded items, some of the configured defaults account for this
