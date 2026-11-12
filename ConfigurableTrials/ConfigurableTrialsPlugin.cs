@@ -1,13 +1,14 @@
 using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
+using HG;
 using MonoMod.RuntimeDetour;
-using RoR2;
 using RiskOfOptions;
 using RiskOfOptions.Options;
+using RoR2;
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -24,7 +25,7 @@ namespace ConfigurableTrialPlugin
         public const string PluginGUID = "ShandoIsSad.ConfigurableTrials";
         public const string PluginAuthor = "ShandoVK";
         public const string PluginName = "ConfigurableTrials";
-        public const string PluginVersion = "0.7.1";
+        public const string PluginVersion = "0.7.5";
 
         private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -34,12 +35,19 @@ namespace ConfigurableTrialPlugin
         private static DLC4TrialSelector activeTrialSelector;
         private static string currentTrial;
         private static bool trialRentalGrant;
+        private static int trialsCompleted;
+        private const int selectorOptions = 3;
+
+        public enum TrialRewardVersion { Pickup, Selector, Random }
 
         public static ConfigEntry<float> startingTimer;
         public static ConfigEntry<float> timeAddedStage;
         public static ConfigEntry<float> timeAddedLoop;
         public static ConfigEntry<bool> timeAddedBossRush;
         public static ConfigEntry<bool> enableCustomStartItems;
+        public static ConfigEntry<bool> enableDebuff;
+        public static ConfigEntry<TrialRewardVersion> trialRewardMode;
+        public static ConfigEntry<int> rewardMilestone;
 
         // dlc4 trial scenes and their variants (each scene has 3 variants), add to here if gearbox ever makes that claptrap trial or some other stupid thing
         private static readonly Dictionary<string, ConfigEntry<bool>> trialVariantToggle = new Dictionary<string, ConfigEntry<bool>>();
@@ -72,7 +80,7 @@ namespace ConfigurableTrialPlugin
 
         private static readonly HashSet<ItemTier> vanillaTiers = new HashSet<ItemTier>
         {
-            ItemTier.Tier1, ItemTier.Tier2, ItemTier.Tier3, ItemTier.Boss, ItemTier.Lunar, ItemTier.VoidTier1, ItemTier.VoidTier2, ItemTier.VoidTier3, ItemTier.VoidBoss, ItemTier.Cursed, ItemTier.FoodTier
+            ItemTier.Tier1, ItemTier.Tier2, ItemTier.Tier3, ItemTier.Boss, ItemTier.Lunar, ItemTier.VoidTier1, ItemTier.VoidTier2, ItemTier.VoidTier3, ItemTier.VoidBoss, ItemTier.Cursed, ItemTier.FoodTier, ItemTier.Hex
         };
 
         private static readonly HashSet<string> customTiers = new HashSet<string>
@@ -96,6 +104,9 @@ namespace ConfigurableTrialPlugin
             {"ProcCityVariant", "Clover, LowHealthOrbSpawner, ITEM_TSUNAMI_SUPPRESSOR, CLASSICITEMSRETURNS_ITEM_WEAKENONCONTACT:3, ITEM_DOUBLE_BAND, ITEM_SANDSWEPT_UNIVERSAL_VIP_PASS:2, MysticsItems_KeepShopTerminalOpen:2, ITEM_DISCOUNTCARDNEW:2"},
             {"MonstersOffMapVariant", "SprintDamage:10, ITEM_SANDSWEPT_MAKESHIFT_PLATE, MysticsItems_BackArmor:5, ITEM_HORSE_HOOF, MATTER_ACCELERATOR_FAITHFUL_MATTER_ACCELERATOR_ITEM:3, GuardingAmulet:5, LITLegacyREPULSIONARMOR"},
         };
+
+        // be evil
+        private static List<ItemIndex> hexList;
 
         public void Awake()
         {
@@ -133,7 +144,25 @@ namespace ConfigurableTrialPlugin
                 "Trial Items",
                 "Enable custom starting items per trial",
                 false,
-                new ConfigDescription("Allows for changing items that are temporarily given to the player for doing trial challenges. Strongly recommended to look at/edit the entry fields if you have a lot of item mods enabled." ));
+                new ConfigDescription("Allows for changing items that are temporarily given to the player for doing trial challenges. Strongly recommended to look at/edit the entry fields if you have a lot of item mods enabled."));
+
+            enableDebuff = Config.Bind(
+                "Trial Items",
+                "Enable Hexes per trial",
+                false,
+                new ConfigDescription("Gives temporary hexes to the player at the start of a trial.\n'Upgrade reward pool threshold' also works with this feature to increase number of hexes given on every x number of trials"));
+
+            trialRewardMode = Config.Bind(
+                "Trial Rewards",
+                "Rewards given",
+                TrialRewardVersion.Selector,
+                new ConfigDescription("How items are given for trial completion.\nPickup: Take 1 item picked up in trial (Vanilla)\nRandom: A random item as if a chest\nSelector: Choice between 3 items, alike Void Potentials"));
+
+            rewardMilestone = Config.Bind(
+                "Trial Rewards",
+                "Upgrade reward pool threshold",
+                5,
+                new ConfigDescription("Upon clearing x number of trials, upgrades the rewards for random & selector modes. These rewards based on a Large Chest's item weights. Set 0 to disable this feature", new AcceptableValueRange<int>(0, 20)));
 
             foreach (var scene in SceneVariants.Values)
             {
@@ -161,6 +190,9 @@ namespace ConfigurableTrialPlugin
                 RiskOfOptionsCompat.AddFloatField(timeAddedLoop);
                 RiskOfOptionsCompat.AddCheckbox(timeAddedBossRush, true);
                 RiskOfOptionsCompat.AddCheckbox(enableCustomStartItems, true);
+                RiskOfOptionsCompat.AddCheckbox(enableDebuff);
+                RiskOfOptionsCompat.AddChoice(trialRewardMode);
+                RiskOfOptionsCompat.AddIntSlider(rewardMilestone);
 
                 foreach (var toggle in trialVariantToggle.Values)
                     RiskOfOptionsCompat.AddCheckbox(toggle, true);
@@ -178,6 +210,11 @@ namespace ConfigurableTrialPlugin
             On.RoR2.GrantItemsToTeam.GrantItemsServer += GrantItemsToTeam_GrantItemsServer;
             On.RoR2.ItemCatalog.SetItemDefs += ItemCatalog_SetItemDefs; // potentially temporary hackjob for missing CanBeRental tags for items
 
+            On.RoR2.CreateItemPotentialFromPickedUpItems.PreparePickupSpawns += TrialReward_Prepare;
+            On.RoR2.CreateItemPotentialFromPickedUpItems.SpawnDroplet += TrialReward_SpawnDroplet;
+            TrialController.onInstanceDiscovered += OnTrialControllerDiscovered;
+            Run.onRunStartGlobal += run => trialsCompleted = 0;
+
             On.RoR2.DLC4TrialSelector.Awake += DLC4TrialSelector_Awake;
             On.RoR2.DLC4TrialSelector.CanAddTrial += DLC4TrialSelector_CanAddTrial;
             On.RoR2.DLC4TrialSelector.RemoveTrialSceneFromCollectionServer += DLC4TrialSelector_RemoveTrialSceneFromCollectionServer;
@@ -190,10 +227,7 @@ namespace ConfigurableTrialPlugin
             activeTrialSelector = self;
 
             if (NetworkServer.active)
-            {
-                // Log.Info($"The Reckoning will now happen in {startingTimer.Value} seconds.");
                 self.SetRemainingTrialTimeServer(startingTimer.Value);
-            }
         }
 
         private void Run_AdvanceStage(On.RoR2.Run.orig_AdvanceStage orig, Run self, SceneDef nextScene)
@@ -222,7 +256,6 @@ namespace ConfigurableTrialPlugin
                 return;
 
             activeTrialSelector.SetRemainingTrialTimeServer(remaining + bonus);
-            // Log.Info($"TIME EXTENDED +{bonus}s ({remaining} -> {remaining + bonus})");
         }
 
         private void DoomTimer_HideTimersServer(On.RoR2.DoomTimer.orig_HideTimersServer orig, DoomTimer self)
@@ -301,6 +334,8 @@ namespace ConfigurableTrialPlugin
 
                 if (NetworkServer.active && !trialRentalGrant && trialStartItems.ContainsKey(self.customName))
                     GrantConfigItems(self.customName, TeamIndex.Player, true, true);
+
+                GrantRandomHexes();
             }
 
             finally
@@ -383,6 +418,173 @@ namespace ConfigurableTrialPlugin
             return result;
         }
 
+        private static List<ItemIndex> GetHexList()
+        {
+            if (hexList != null)
+                return hexList;
+
+            var pool = new List<ItemIndex>();
+            foreach (var index in ItemCatalog.allItems)
+            {
+                var def = ItemCatalog.GetItemDef(index);
+                if (!def || def.tier != ItemTier.Hex)
+                    continue;
+
+                pool.Add(index);
+            }
+
+            if (pool.Count > 0)
+                hexList = pool;
+
+            return pool;
+        }
+
+        private static void GrantRandomHexes()
+        {
+            if (!enableDebuff.Value || !NetworkServer.active || !Run.instance)
+                return;
+
+            var pool = GetHexList()
+                .Where(idx => 
+                { 
+                    var def = ItemCatalog.GetItemDef(idx);
+                    return !def.requiredExpansion || Run.instance.IsExpansionEnabled(def.requiredExpansion);
+                })
+                .ToList();
+
+            if (pool.Count == 0)
+                return;
+
+            int interval = rewardMilestone.Value;
+            bool milestone = interval > 0 && (trialsCompleted + 1) % interval == 0;
+
+            var rng = new Xoroshiro128Plus(Run.instance.treasureRng.nextUlong);
+            int count = milestone ? rng.RangeInt(3, 6) : rng.RangeInt(1, 4);
+
+            var stacks = new Dictionary<ItemIndex, int>();
+            for (int i = 0; i < count; i++)
+            {
+                var pick = rng.NextElementUniform(pool);
+                stacks[pick] = stacks.TryGetValue(pick, out var n) ? n + 1 : 1;
+            }
+
+            foreach (var master in CharacterMaster.readOnlyInstancesList)
+            {
+                if (!master || master.teamIndex != TeamIndex.Player || !master.playerCharacterMasterController)
+                    continue;
+
+                var body = master.GetBody();
+                foreach (var kv in stacks)
+                {
+                    master.inventory.GiveItemRented(kv.Key, kv.Value);
+                    if (body)
+                        GlobalEventManager.OnCharacterPickupItem(body, PickupCatalog.FindPickupIndex(kv.Key), kv.Value);
+                }
+            }
+        }
+
+        // trial rewards
+        private static void OnTrialControllerDiscovered(TrialController controller)
+        {
+            controller.onTrialStateChangeGlobal -= OnTrialStateChanged;
+            controller.onTrialStateChangeGlobal += OnTrialStateChanged;
+        }
+
+        private static void OnTrialStateChanged(TrialController.TrialControllerState oldState, TrialController.TrialControllerState newState)
+        {
+            if (!NetworkServer.active)
+                return;
+
+            if (newState == TrialController.TrialControllerState.MissionComplete && oldState != TrialController.TrialControllerState.MissionComplete)
+                trialsCompleted++;
+        }
+
+        private static bool IsTrialRewardDropper(CreateItemPotentialFromPickedUpItems self)
+        {
+            return self.pickupPrefab && self.pickupPrefab.name.StartsWith("TrialPotentialBlessing");
+        }
+
+        private bool TrialReward_Prepare(On.RoR2.CreateItemPotentialFromPickedUpItems.orig_PreparePickupSpawns orig, CreateItemPotentialFromPickedUpItems self)
+        {
+            bool result = orig(self);
+
+            if (!result && trialRewardMode.Value != TrialRewardVersion.Pickup && IsTrialRewardDropper(self))
+                return true;
+
+            return result;
+        }
+
+        private void TrialReward_SpawnDroplet(On.RoR2.CreateItemPotentialFromPickedUpItems.orig_SpawnDroplet orig, CreateItemPotentialFromPickedUpItems self, Vector3 velocity)
+        {
+            if (trialRewardMode.Value == TrialRewardVersion.Pickup || !IsTrialRewardDropper(self))
+            {
+                orig(self, velocity);
+                return;
+            }
+
+            bool random = trialRewardMode.Value == TrialRewardVersion.Random;
+            var options = RollRewardOptions(random ? 1 : selectorOptions);
+            if (options.Length == 0)
+                return;
+
+            Transform spawn = self.pickupSpawnPoint ? self.pickupSpawnPoint : self.transform;
+
+            if (random)
+            {
+                PickupDropletController.CreatePickupDroplet(new GenericPickupController.CreatePickupInfo{pickup = options[0].pickup, rotation = Quaternion.identity, position = spawn.position}, spawn.position, velocity);
+                return;
+            }
+
+            ItemTier highest = ItemTier.NoTier;
+            foreach (var opt in options)
+            {
+                var def = PickupCatalog.GetPickupDef(opt.pickup.pickupIndex);
+                if (def != null && (highest == ItemTier.NoTier || def.itemTier > highest))
+                    highest = def.itemTier;
+            }
+
+            var pickup = new UniquePickup(PickupCatalog.FindPickupIndex(highest));
+            pickup.ignoreArtifactBasedPickupReplacements = self.ignoreArtifactPickupReplacements;
+
+            PickupDropletController.CreatePickupDroplet(new GenericPickupController.CreatePickupInfo{pickup = pickup, pickerOptions = options, maxOptionCount = Mathf.Min(options.Length, self.maxOptions), rotation = Quaternion.identity, position = spawn.position, prefabOverride = self.pickupPrefab }, spawn.position, velocity);
+        }
+
+        private static PickupPickerController.Option[] RollRewardOptions(int count)
+        {
+            var run = Run.instance;
+            var rng = new Xoroshiro128Plus(run.treasureRng.nextUlong);
+
+            int interval = rewardMilestone.Value;
+            bool upgraded = interval > 0 && trialsCompleted > 0 && trialsCompleted % interval == 0;
+
+            var tiers = upgraded ? new[] { (pool: run.availableTier2DropList, weight: 80f, name: "T2"), (pool: run.availableTier3DropList, weight: 20f, name: "T3") }
+                : new[] { (pool: run.availableTier1DropList, weight: 79.2f, name: "T1"), (pool: run.availableTier2DropList, weight: 19.8f, name: "T2"), (pool: run.availableTier3DropList, weight: 0.99f, name: "T3") };
+
+            float totalWeight = tiers.Sum(t => t.weight);
+            var chosen = new List<PickupIndex>();
+
+            for (int attempts = 0; chosen.Count < count && attempts < count * 20; attempts++)
+            {
+                float roll = rng.nextNormalizedFloat * totalWeight;
+                var tier = tiers[tiers.Length - 1];
+                foreach (var t in tiers)
+                {
+                    roll -= t.weight;
+                    if (roll <= 0f) { tier = t; break; }
+                }
+
+                var candidates = tier.pool.Where(p => !chosen.Contains(p)).ToList();
+                if (candidates.Count == 0)
+                    continue;
+
+                var pick = rng.NextElementUniform(candidates);
+                chosen.Add(pick);
+            }
+
+            return chosen
+                .Select(p => new PickupPickerController.Option { available = true, pickup = new UniquePickup(p) }).ToArray();
+        }
+
         // trial blacklist
         private static bool IsVariantEnabled(string customName)
         {
@@ -428,7 +630,6 @@ namespace ConfigurableTrialPlugin
             var filter = (Func<SceneDef, bool>)Delegate.CreateDelegate(typeof(Func<SceneDef, bool>), self, canAddTrialMethod);
 
             self.trialsSceneCollection.AddToWeightedSelection(selection, filter);
-            // Log.Info($"All trial objectives have been refreshed.");
         }
     }
 
@@ -441,9 +642,15 @@ namespace ConfigurableTrialPlugin
         public static void AddCheckbox(ConfigEntry<bool> entry, bool restartRequired = false) => ModSettingsManager.AddOption(new CheckBoxOption(entry, restartRequired));
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void AddIntSlider(ConfigEntry<int> entry) => ModSettingsManager.AddOption(new IntSliderOption(entry));
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void AddFloatField(ConfigEntry<float> entry) => ModSettingsManager.AddOption(new FloatFieldOption(entry));
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void AddStringField(ConfigEntry<string> entry) => ModSettingsManager.AddOption(new StringInputFieldOption(entry));
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void AddChoice<T>(ConfigEntry<T> entry, bool restartRequired = false) where T : Enum => ModSettingsManager.AddOption(new ChoiceOption(entry, restartRequired));
     }
 }

@@ -14,13 +14,14 @@ Time can now be earned by clearing stages, looping, or finishing Soulbound Thres
 
 
 #### Custom Starting Items
-You can now set items of your choice that you and other players will temporarily have for a trial. This supports many mods that adds items, such as [Sandswept](https://thunderstore.io/c/riskofrain2/p/SandsweptTeam/Sandswept/), [Starstorm 2](https://thunderstore.io/c/riskofrain2/p/TeamMoonstorm/Starstorm2/), [Augmentum](https://thunderstore.io/c/riskofrain2/p/TeamAugmentum/Augmentum/), [Faithful](https://thunderstore.io/c/riskofrain2/p/SpilledSoup_Projects/Faithful/), and many more. (You will need any respective DLCs tied to vanilla DLC items or Void-Tiered items for the option to work)
-![IS THAT A SKATEBOARD](https://raw.githubusercontent.com/ShandoVK/ConfigurableTrials/refs/heads/main/Images/Look%20ma%2C%20a%20skateboard!.png)
-
+You can now set items of your choice that you and other players will temporarily have for a trial. This supports many mods that adds items, such as [Sandswept](https://thunderstore.io/c/riskofrain2/p/SandsweptTeam/Sandswept/), [Starstorm 2](https://thunderstore.io/c/riskofrain2/p/TeamMoonstorm/Starstorm2/), [Augmentum](https://thunderstore.io/c/riskofrain2/p/TeamAugmentum/Augmentum/), [Faithful](https://thunderstore.io/c/riskofrain2/p/SpilledSoup_Projects/Faithful/), and many more. (If the item was released via a DLC, you'll need the DLC to include them.)
+![IS THAT A METRONOME](https://raw.githubusercontent.com/ShandoVK/ConfigurableTrials/refs/heads/main/Images/Look%20ma%2C%20a%20skateboard!.png)
+Hexes can also be added for extra challenge, install [Hexing Chaos](https://thunderstore.io/c/riskofrain2/p/duckduckgreyduck/HexingChaos/) if you want more perplexing problems in your runs as well.
 
 #
 The item selector at the start for trials has also been updated to support modded items.
 ![More items](https://github.com/ShandoVK/ConfigurableTrials/blob/main/Images/more%20stuff.png)
+
 
 #### Repeatable Trials
 In vanilla, all trials can only be done once in a run (totaling to 9 max trials). This mod allows you to be able to do an infinite number of trials if your heart desires to do so.
@@ -31,7 +32,7 @@ You can now blacklist individual trials, no longer are you potentially forced to
 
 
 #
-All of the features listed above can be configured to your liking, and supports **Risk of Options** as well.
+All of the features listed above (and more) can be configured to your liking, and supports [Risk of Options](https://thunderstore.io/c/riskofrain2/p/Rune580/Risk_Of_Options/) as well.
 
 ## Known Issues
 - Sibylline & Highlander-tiered items seem to not correctly get stored with the rest of the player's inventory when a trial starts. This may result in instances like 2 simultaneous Highlander items held when that previously should be impossible.

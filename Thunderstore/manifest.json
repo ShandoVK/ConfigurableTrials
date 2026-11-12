@@ -1,6 +1,6 @@
 ﻿{
 	"name": "ConfigurableTrials",
-	"version_number": "0.7.0",
+	"version_number": "0.7.5",
 	"website_url": "https://github.com/ShandoVK/ConfigurableTrials",
 	"description": "Allows users to configure various aspects of N'kuhana's Trials. Supports Risk of Options",
 	"dependencies": [
