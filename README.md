@@ -1,6 +1,6 @@
  # Configurable Trials
 
-A Risk of Rain 2 mod that allows you to be able to edit the time, starting items, and which trials can appear for the N'kuhana Trials in Hallowed Concepts.
+A Risk of Rain 2 mod that allows you to be able to edit the time, starting items, rewards, and which trials can appear for the N'kuhana Trials in Hallowed Concepts.
 
 ## Known Issues
 - Sibylline & Highlander-tier items seem to persist into trials instead of being stored away temporarily at the start unlike all other items.
