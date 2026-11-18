@@ -1,8 +1,6 @@
 using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
-using HG;
-using MonoMod.RuntimeDetour;
 using RiskOfOptions;
 using RiskOfOptions.Options;
 using RoR2;
@@ -25,7 +23,7 @@ namespace ConfigurableTrialPlugin
         public const string PluginGUID = "ShandoIsSad.ConfigurableTrials";
         public const string PluginAuthor = "ShandoVK";
         public const string PluginName = "ConfigurableTrials";
-        public const string PluginVersion = "0.7.5";
+        public const string PluginVersion = "0.7.6";
 
         private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -86,7 +84,7 @@ namespace ConfigurableTrialPlugin
         private static readonly HashSet<string> customTiers = new HashSet<string>
         {
             "Core",
-            "VoidLunar"
+            "VoidLunarTierDef"
             //Sibylline & Highlander items don't actually store unlike other items, so they persist into trials. Not sure if this is intentional \(- n -)/
         };
 
