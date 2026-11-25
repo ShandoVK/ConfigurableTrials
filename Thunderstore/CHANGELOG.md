@@ -1,8 +1,12 @@
+## 0.7.7
+- Added method to expand items displayed for the selector at the start of a trial<br>
+This should help trying to find items for those doing trials much later in a run. (speaking from experience)
+
+- Remove hexes from the selector at the start of a trial
+
 ## 0.7.6
 - Actually added Void Lunar tier this time<br>
 ![typo](https://media1.tenor.com/m/8tZ2c4_L4-cAAAAC/cat-laptop.gif)<br>
-
-- Removed Glip, you will be missed
 
 ## 0.7.5
 - Added different reward modes for items you get for finishing a trial<br>
