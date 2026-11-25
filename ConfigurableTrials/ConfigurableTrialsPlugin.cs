@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using RiskOfOptions;
 using RiskOfOptions.Options;
 using RoR2;
+using RoR2.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,6 +12,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.UI;
 
 namespace ConfigurableTrialPlugin
 {
@@ -23,7 +25,7 @@ namespace ConfigurableTrialPlugin
         public const string PluginGUID = "ShandoIsSad.ConfigurableTrials";
         public const string PluginAuthor = "ShandoVK";
         public const string PluginName = "ConfigurableTrials";
-        public const string PluginVersion = "0.7.6";
+        public const string PluginVersion = "0.7.7";
 
         private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -35,6 +37,10 @@ namespace ConfigurableTrialPlugin
         private static bool trialRentalGrant;
         private static int trialsCompleted;
         private const int selectorOptions = 3;
+        private const int itemsRowBase = 5; private const int rowExpandThreshold = 4;
+        private const int itemsDisplay = itemsRowBase * rowExpandThreshold;
+        private const int expandLimit = 8; private const float minItemSize = 48f;
+        private static readonly ConditionalWeakTable<GridLayoutGroup, object> originalItemSizes = new ConditionalWeakTable<GridLayoutGroup, object>();
 
         public enum TrialRewardVersion { Pickup, Selector, Random }
 
@@ -78,7 +84,7 @@ namespace ConfigurableTrialPlugin
 
         private static readonly HashSet<ItemTier> vanillaTiers = new HashSet<ItemTier>
         {
-            ItemTier.Tier1, ItemTier.Tier2, ItemTier.Tier3, ItemTier.Boss, ItemTier.Lunar, ItemTier.VoidTier1, ItemTier.VoidTier2, ItemTier.VoidTier3, ItemTier.VoidBoss, ItemTier.Cursed, ItemTier.FoodTier, ItemTier.Hex
+            ItemTier.Tier1, ItemTier.Tier2, ItemTier.Tier3, ItemTier.Boss, ItemTier.Lunar, ItemTier.VoidTier1, ItemTier.VoidTier2, ItemTier.VoidTier3, ItemTier.VoidBoss, ItemTier.Cursed, ItemTier.FoodTier
         };
 
         private static readonly HashSet<string> customTiers = new HashSet<string>
@@ -103,7 +109,6 @@ namespace ConfigurableTrialPlugin
             {"MonstersOffMapVariant", "SprintDamage:10, ITEM_SANDSWEPT_MAKESHIFT_PLATE, MysticsItems_BackArmor:5, ITEM_HORSE_HOOF, MATTER_ACCELERATOR_FAITHFUL_MATTER_ACCELERATOR_ITEM:3, GuardingAmulet:5, LITLegacyREPULSIONARMOR"},
         };
 
-        // be evil
         private static List<ItemIndex> hexList;
 
         public void Awake()
@@ -204,6 +209,7 @@ namespace ConfigurableTrialPlugin
             On.RoR2.DoomTimer.HideTimersServer += DoomTimer_HideTimersServer;
             On.RoR2.ChampRushMissionController.CompleteReaperFight += ChampRush_CompleteReaperFight;
 
+            On.RoR2.UI.PickupPickerPanel.SetPickupOptions += PickupPickerPanel_SetPickupOptions;
             On.RoR2.TrialVariantEventRelay.OnVariantChosen += TrialVariantEventRelay_OnVariantChosen;
             On.RoR2.GrantItemsToTeam.GrantItemsServer += GrantItemsToTeam_GrantItemsServer;
             On.RoR2.ItemCatalog.SetItemDefs += ItemCatalog_SetItemDefs; // potentially temporary hackjob for missing CanBeRental tags for items
@@ -296,11 +302,113 @@ namespace ConfigurableTrialPlugin
         }
 
         // trial starting items
+        private static int GetColumnCount(int itemCount)
+        {
+            if (itemCount <= itemsDisplay)
+                return itemsRowBase;
+
+            int extra = Mathf.CeilToInt((itemCount - itemsDisplay) / (float)rowExpandThreshold);
+            return Mathf.Min(itemsRowBase + extra, expandLimit);
+        }
+
+        private static bool IsRentalSelector(PickupPickerController.Option[] options)
+        {
+            foreach (var opt in options)
+            {
+                var def = PickupCatalog.GetPickupDef(opt.pickup.pickupIndex);
+                if (def == null || def.itemIndex == ItemIndex.None)
+                    return false;
+
+                var item = ItemCatalog.GetItemDef(def.itemIndex);
+                if (!item || !item.tags.Contains(ItemTag.CanBeRental))
+                    return false;
+            }
+            return true;
+        }
+
+        private static void HideScrollbar(ScrollRect scroll)
+        {
+            if (!scroll)
+                return;
+
+            if (scroll.verticalScrollbar)
+                scroll.verticalScrollbar.gameObject.SetActive(false);
+
+            scroll.verticalScrollbar = null;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+        }
+
+        private static RectTransform FindViewport(GridLayoutGroup grid)
+        {
+            var rectMask = grid.GetComponentInParent<RectMask2D>();
+            if (rectMask)
+                return rectMask.rectTransform;
+
+            var mask = grid.GetComponentInParent<Mask>();
+            if (mask)
+                return mask.rectTransform;
+
+            var scroll = grid.GetComponentInParent<ScrollRect>();
+            if (scroll && scroll.viewport)
+                return scroll.viewport;
+
+            return scroll ? scroll.transform as RectTransform : null;
+        }
+
+        private void PickupPickerPanel_SetPickupOptions(On.RoR2.UI.PickupPickerPanel.orig_SetPickupOptions orig, PickupPickerPanel self, PickupPickerController.Option[] options)
+        {
+            orig(self, options);
+
+            if (options == null || options.Length <= itemsDisplay || !IsRentalSelector(options))
+                return;
+
+            var grid = self.GetComponentInChildren<GridLayoutGroup>(true);
+            if (!grid)
+                return;
+
+            var original = (Vector2)originalItemSizes.GetValue(grid, g => g.cellSize);
+            float spacing = grid.spacing.x;
+            HideScrollbar(grid.GetComponentInParent<ScrollRect>());
+            var viewport = FindViewport(grid);
+            if (viewport)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(viewport);
+
+            float available = viewport ? viewport.rect.width - grid.padding.horizontal : 0f;
+            float vanillaWidth = original.x * itemsRowBase + spacing * (itemsRowBase - 1);
+            if (available < vanillaWidth)
+                available = vanillaWidth + original.x * 0.4f;
+
+            int columns = GetColumnCount(options.Length);
+            float cell = (available - spacing * (columns - 1)) / columns;
+            if (cell < minItemSize)
+            {
+                columns = Mathf.Max(itemsRowBase, Mathf.FloorToInt((available + spacing) / (minItemSize + spacing)));
+                cell = (available - spacing * (columns - 1)) / columns;
+            }
+
+            cell = Mathf.Min(cell, original.x);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = columns;
+            grid.cellSize = new Vector2(cell, cell * (original.y / original.x));
+            LayoutRebuilder.ForceRebuildLayoutImmediate(grid.transform as RectTransform);
+        }
+
         private static void ItemCatalog_SetItemDefs(On.RoR2.ItemCatalog.orig_SetItemDefs orig, ItemDef[] newItemDefs)
         {
             foreach (var def in newItemDefs)
             {
-                if (!def || def.hidden || !def.canRemove || def.isConsumed)
+                if (!def)
+                    continue;
+
+                // be nice
+                if (def.tier == ItemTier.Hex)
+                {
+                    if (def.tags != null && def.tags.Contains(ItemTag.CanBeRental))
+                        def.tags = def.tags.Where(t => t != ItemTag.CanBeRental).ToArray();
+                    continue;
+                }
+
+                if (def.hidden || !def.canRemove || def.isConsumed)
                     continue;
                 if (!IsRentalTier(def) || def.tags.Contains(ItemTag.CanBeRental))
                     continue;
@@ -436,7 +544,7 @@ namespace ConfigurableTrialPlugin
 
             return pool;
         }
-
+        
         private static void GrantRandomHexes()
         {
             if (!enableDebuff.Value || !NetworkServer.active || !Run.instance)
@@ -466,6 +574,7 @@ namespace ConfigurableTrialPlugin
                 stacks[pick] = stacks.TryGetValue(pick, out var n) ? n + 1 : 1;
             }
 
+            // be evil
             foreach (var master in CharacterMaster.readOnlyInstancesList)
             {
                 if (!master || master.teamIndex != TeamIndex.Player || !master.playerCharacterMasterController)
