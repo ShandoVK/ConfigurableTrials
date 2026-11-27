@@ -25,7 +25,7 @@ namespace ConfigurableTrialPlugin
         public const string PluginGUID = "ShandoIsSad.ConfigurableTrials";
         public const string PluginAuthor = "ShandoVK";
         public const string PluginName = "ConfigurableTrials";
-        public const string PluginVersion = "0.7.7";
+        public const string PluginVersion = "0.7.77";
 
         private static readonly PropertyInfo timeTilDoomsday = typeof(DoomTimer).GetProperty("timeUntilFailure", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo timePause = typeof(DoomTimer).GetField("pauseTime", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -302,6 +302,20 @@ namespace ConfigurableTrialPlugin
         }
 
         // trial starting items
+
+        // the hotfix of shame
+        private static bool IsTrialSelector(PickupPickerPanel panel, PickupPickerController.Option[] options)
+        {
+            var controller = panel.pickerController;
+            if (!controller)
+                return false;
+
+            if (!controller.name.StartsWith("TrialPotentialInitialPickup"))
+                return false;
+
+            return IsRentalSelector(options);
+        }
+
         private static int GetColumnCount(int itemCount)
         {
             if (itemCount <= itemsDisplay)
@@ -359,7 +373,7 @@ namespace ConfigurableTrialPlugin
         {
             orig(self, options);
 
-            if (options == null || options.Length <= itemsDisplay || !IsRentalSelector(options))
+            if (options == null || options.Length <= itemsDisplay || !IsTrialSelector(self, options))
                 return;
 
             var grid = self.GetComponentInChildren<GridLayoutGroup>(true);

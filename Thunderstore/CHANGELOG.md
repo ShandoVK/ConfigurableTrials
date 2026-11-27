@@ -1,3 +1,7 @@
+## 0.7.77
+- Hotfix to the selector method to fix it bricking Scrappers & making Command selection options microscopic<br>
+oops
+
 ## 0.7.7
 - Added method to expand items displayed for the selector at the start of a trial<br>
 This should help trying to find items for those doing trials much later in a run. (speaking from experience)
