@@ -37,7 +37,9 @@ All of the features listed above (and more) can be configured to your liking, an
 ## Known Issues
 - Item drops in a run (especially white-tier ones) are basically only vanilla. None of my methods item changing methods change items that can be found outside of the trial end hub, and each trial seems to have a specific curtailed set of items to spawn. Might explore an option to change the drops if there's a feasible way to dynamically read in the available item pool but no guarantee on that.
 
-- Some trials (e.g. Abyss) seem to be wonky in multiplayer, I believe this might be on Gearbox's end but if any is caused by this mod, do report it on github
+- Some trials (e.g. Abyss) seem to be wonky in multiplayer, I believe this might be on Gearbox's end but do let me know if it's something on my end
+
+- If you encounter any additional problems than the ones I listed above, do send a report on the [github repo](https://github.com/ShandoVK/ConfigurableTrials/issues) or send something in #tech-support on the [Risk of Rain 2 Modding Discord](https://discord.com/invite/5MbXZvd).
 
 ## For Developers
 My fix just appends CanBeRental to the ItemDef's tags (This is the tag for Ethereal items for DLC4). Applying this tag to the asset's ItemDef should fix the item being missing in the selector.
